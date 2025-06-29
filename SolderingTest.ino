@@ -227,9 +227,10 @@ void loop() {
   // printNumber(timeinfo.tm_sec);
   // printCharacterM2('s');
   
-  // ClockModeAuto(&timeinfo);
+  ClockModeAuto(&timeinfo);
 
-  ClockModeManual(&timeinfo , 1);
+
+  // ClockModeManual(&timeinfo , 1);
 
   if(modeCurrentState > 5)
   {
@@ -299,6 +300,10 @@ void ClockModeAuto(const struct tm*timeinfo)
     {
       ClockMode(modeCurrentState , timeinfo);
       // Serial.println(modeFlag);
+      if(digitalRead(buttonUpPin)||digitalRead(buttonDownPin) )
+      {
+        ClockModeManual(timeinfo , modeCurrentState);
+      }
     }
   }
   
@@ -366,7 +371,7 @@ void ClockModeManual(const struct tm*timeinfo , int currentState)
       }
     }
   }
-  delay(2000);
+  
 }
 
 char ButtonReadState(int buttonPin1 , int buttonPin2)
