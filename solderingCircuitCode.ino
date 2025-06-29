@@ -30,10 +30,10 @@ const unsigned long displayInterval = 1000; // 1 seconds per display
 const unsigned long buzzerDuration = 20; // 20ms buzzer on
 const unsigned long dhtInterval = 1000; // 2 seconds for DHT11 reads
 const unsigned long serialInterval = 1000; // 1 second for Serial prints
-const unsigned long debounceTime = 800; // 800ms debounce for buttons
+const unsigned long debounceTime = 300; // 300ms debounce for buttons
 
 // Display and buzzer states
-volatile int displayMode = 0; // 0: Time, 1: Sensors
+volatile int displayMode = 0; // 0: Time, 1: Temperature & Humidity, 2: CO ppb & Atmosphere quality
 const int maxModes = 2;
 volatile bool buttonUpPressed = false;
 volatile bool buttonDownPressed = false;
@@ -65,18 +65,36 @@ Bonezegei_DHT11 dht(DHT_PIN);
 // Interrupt handlers for buttons
 void IRAM_ATTR handleUpButton() {
   unsigned long currentMillis = millis();
+  if(displayMode < 0)
+  {
+    displayMode = maxModes;
+  }
+  else if(displayMode > maxModes)
+  {
+    displayMode = 0;
+  }
+  // Debounce button using millis
   if (currentMillis - lastUpInterrupt > debounceTime) {
     buttonUpPressed = true;
-    displayMode = (displayMode + 1) % maxModes; // Next mode
+    displayMode = (displayMode + 1) ;
     lastUpInterrupt = currentMillis;
   }
 }
 
 void IRAM_ATTR handleDownButton() {
   unsigned long currentMillis = millis();
+  if(displayMode < 0)
+  {
+    displayMode = maxModes;
+  }
+  else if(displayMode > maxModes)
+  {
+    displayMode = 0;
+  }
+  // Debounce button using millis
   if (currentMillis - lastDownInterrupt > debounceTime) {
     buttonDownPressed = true;
-    displayMode = (displayMode - 1 + maxModes) % maxModes; // Previous mode
+    displayMode = displayMode - 1 ; // Previous mode
     lastDownInterrupt = currentMillis;
   }
 }
@@ -174,10 +192,13 @@ void setup() {
 
 void loop() {
   unsigned long currentMillis = millis();
-  
+
+
   // Handle buzzer timing
   if ((buttonUpPressed || buttonDownPressed) && !buzzerActive) {
     digitalWrite(BUZZER_PIN, HIGH);
+    Serial.println(displayMode);
+    delay(100);
     // delay(10);
     buzzerActive = true;
     buzzerStartTime = currentMillis;
@@ -234,34 +255,84 @@ void loop() {
   static unsigned long lastDisplayUpdate = 0;
   if (currentMillis - lastDisplayUpdate >= displayInterval || buttonUpPressed || buttonDownPressed) {
     lcd.clear();
-    if (displayMode == 0) 
+    switch (displayMode)
     {
-      // Display 1: Time
-      lcd.setCursor(0, 0);
-      lcd.print(timeStatus.substring(0, 10)); // YYYY-MM-DD
-      lcd.setCursor(0, 1);
-      lcd.print(timeStatus.substring(11));    // HH:MM:SS
-    } 
-    else if(displayMode == 1) 
-    {
-      // Display 2: Sensors (MQ-7 and DHT11)
-      lcd.setCursor(0, 0);
-      lcd.print("CO:");
-      lcd.print(co_ppb, 2);
-      lcd.print("ppb");
-      lcd.setCursor(0, 1);
-      lcd.print("T:");
-      lcd.print(tempStatus);
-      lcd.print(" H:");
-      lcd.print(humStatus);
+      case 0:
+      
+        // Display 1: Time
+        lcd.setCursor(0, 0);
+        lcd.print(timeStatus.substring(0, 10)); // YYYY-MM-DD
+        lcd.setCursor(0, 1);
+        lcd.print(timeStatus.substring(11));    // HH:MM:SS
+      
+      break;
+
+      case 1: 
+      
+        // Display 2: Sensors (MQ-7 and DHT11)
+        lcd.setCursor(0, 0);
+        lcd.print("CO:");
+        lcd.print(co_ppb, 2);
+        lcd.print("ppb");
+        lcd.setCursor(0, 1);
+        lcd.print("Status: ");
+        if(co_ppb < 0.15)
+        {
+          lcd.print("Normal");
+        }
+        else if (co_ppb < 0.4)
+        {
+          lcd.print("Danger");
+        }
+        else
+        {
+          lcd.print("Dead!");
+        }
+
+      break;
+
+      case 2:
+      
+        lcd.setCursor(0, 0);
+        lcd.print("Temp:");
+        lcd.print(tempStatus);
+        lcd.setCursor(0, 1);
+        lcd.print("Humi:");
+        lcd.print(humStatus);
+      
+      break;
+
+      // // Reset displayMode
+      // case -1:
+
+      //   displayMode = maxModes;
+
+      // break;
+
+      // case 3:
+
+      //   displayMode = 0;
+
+      // break;  
+
+      // Default mode
+      default :
+        lcd.setCursor(0, 0);
+        lcd.print(timeStatus.substring(0, 10)); // YYYY-MM-DD
+        lcd.setCursor(0, 1);
+        lcd.print(timeStatus.substring(11));    // HH:MM:SS
+      break;
     }
     lastDisplayUpdate = currentMillis;
   }
 
   printLocalTime();
 
+
+
   if(co_ppb > 0.4)
   {
+    // Arlert in case very dangerous
     digitalWrite(BUZZER_PIN, HIGH);
   }
 
@@ -278,8 +349,19 @@ void loop() {
     Serial.print(" | Humidity: ");
     Serial.print(humStatus);
     Serial.print(" | Time: ");
-    Serial.println(timeStatus);
+    Serial.print(timeStatus);
+    Serial.print(" | Mode: ");
+    Serial.println(displayMode);
     lastSerialPrint = currentMillis;
+  }
+
+  if(displayMode < 0)
+  {
+    displayMode = maxModes;
+  }
+  else if(displayMode > maxModes)
+  {
+    displayMode = 0;
   }
 }
 
@@ -290,6 +372,6 @@ void printLocalTime(){
     Serial.println("Failed to obtain time");
     return;
   }
-  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+  // Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
 
 }
